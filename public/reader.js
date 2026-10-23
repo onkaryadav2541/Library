@@ -51,6 +51,7 @@ export class BookReader {
     $('#reader-status').textContent = 'Opening your book…';
     $('#reader').classList.add('loading');
     $('#reader').showModal(); document.body.style.overflow = 'hidden';
+    $('#source-link').hidden=!!book.personal;
     $('#source-link').href = book.local ? `/books/${book.id}.txt` : `https://www.gutenberg.org/ebooks/${book.id}`;
     this.contents(false);
     try {
@@ -76,7 +77,7 @@ export class BookReader {
     } catch {
       if (token !== this.token) return;
       $('#reader').classList.remove('loading');
-      $('#reader-status').textContent = 'This source could not be reached. Try another book, or open the original text using the link below.';
+      $('#reader-status').textContent = 'This source could not be reached. Please retry or choose another book. Your place is saved.';
     }
   }
 
@@ -187,7 +188,7 @@ export class BookReader {
   buildContents() {
     const host = $('#chapter-list'); host.replaceChildren();
     const startButton = document.createElement('button'); startButton.textContent = 'Beginning of the book'; startButton.dataset.offset = '0'; host.append(startButton);
-    const pattern = /^(?:chapter\s+(?:\d+|[ivxlcdm]+)\b[^\n]{0,100}|(?:prologue|epilogue|preface|introduction)\b[^\n]{0,80}|(?:book|part)\s+(?:\d+|[ivxlcdm]+|one|two|three)\b[^\n]{0,80})/gim;
+    const pattern = /^(?:chapter\s+(?:\d+|[ivxlcdm]+)\b[^\n]{0,100}|(?:prologue|epilogue|preface|introduction)\b[^\n]{0,80}|(?:book|part|section)\s+(?:\d+|[ivxlcdm]+|one|two|three)\b[^\n]{0,80})/gim;
     let match, count = 0;
     while ((match = pattern.exec(this.text)) && count < 200) {
       const button = document.createElement('button'); button.textContent = match[0]; button.dataset.offset = String(match.index / Math.max(1, this.text.length - 1)); host.append(button); count++;

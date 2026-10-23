@@ -36,7 +36,7 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (!['GET','HEAD'].includes(req.method)) return send(res, 405, 'Method not allowed', undefined, {Allow:'GET, HEAD'});
-    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:3}), types['.json']);
+    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:4}), types['.json']);
     if (url.pathname === '/api/providers') return send(res,200,JSON.stringify(PROVIDERS),types['.json']);
     if (url.pathname === '/api/discover') {
       const provider=url.searchParams.get('provider'),kind=url.searchParams.get('kind')||'book';

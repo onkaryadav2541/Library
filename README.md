@@ -20,7 +20,7 @@ On other platforms, run `npm start` (port 3000 by default), or set `PORT` to ano
 
 Folio searches **six free-source adapters**: Project Gutenberg, Open Library, Google Books, AniList, Jikan, and Kitsu. Books use the first three; anime and manga use the latter three. Sources load independently with per-source status, search caching, fallback, and retry. No paid subscription or embedded API key is required; public provider quotas still apply.
 
-Romance, thriller, mystery, fantasy, nonfiction, reference, and other genres search the online catalogs. Open Library excludes borrow-only items. Google Books excludes partial previews. The Read inside Folio filter restricts results to in-app text; other free editions open the source reader. The existing 48 downloaded books remain an instant fallback. **Adding collection coverage does not require adding files to `public/books/`.**
+Romance, thriller, mystery, fantasy, nonfiction, reference, and other genres search the online catalogs. Read now shows only books with text that Folio can render. Searches also include catalog-only titles, clearly marked when their full text is unavailable. Book clicks stay in Folio. Catalog-only listings have an Add my copy action instead of redirecting readers to another library. The existing 48 downloaded books remain an instant fallback. **Adding collection coverage does not require adding files to `public/books/`.**
 
 Anime/manga discovery includes volume/chapter/episode counts when available, numerically ordered episode guides, source-provided related series, and official reading links. It does not promise unlimited free copyrighted manga or video. Real source quotas and regional availability apply.
 
@@ -34,7 +34,13 @@ See [Data sources, behavior, and API documentation](docs/data-sources.md) for so
 
 The responsive reader uses two pages on desktop and one page on mobile. It measures **only the current spread**, never the entire novel. Changing fonts preserves the current character position and does not re-layout thousands of pages. Previously measured spreads and recently opened texts are cached in the browser.
 
-Tools include adjustable fonts, light/dark reading themes, chapter navigation where markers exist, position seeking, keyboard arrows, bookmarks, and native fullscreen with an expanded-layout fallback. Bookshelf, history, bookmarks, and reading progress are stored locally in the browser; there are no user accounts or cross-device synchronization. Quiet mode changes the visual ambience without playing audio. Reduced-motion preferences are respected.
+Tools include adjustable fonts, light/dark reading themes, chapter navigation where markers exist, position seeking, keyboard arrows, bookmarks, and native fullscreen with an expanded-layout fallback. Personal EPUB/TXT books are stored in IndexedDB; bookshelf, history, bookmarks, and reading progress are stored locally in the browser; there are no user accounts or cross-device synchronization. Quiet mode changes the visual ambience without playing audio. Reduced-motion preferences are respected.
+
+## Your own books and modern titles
+
+Use **Add your book** to open a DRM-free EPUB or UTF-8 TXT file (up to 12 MB). Text stays on the user's device in browser storage and opens in the same Folio reader; it is never uploaded. EPUB content follows its package spine, is extracted in a worker with expansion limits, and is treated as inert text. Scripts are stripped and encrypted EPUBs are rejected. This supports text-based EPUBs, not fixed-layout picture books, DRM, or PDF.
+
+Private imports do not publish a book to other visitors. To offer modern copyrighted works such as Paulo Coelho's *The Alchemist* to all visitors, the operator must obtain a licensed full-text catalog or distribution rights. Catalog APIs supply metadata, not those rights. The app does not claim that an unavailable title can be read for free.
 
 ## Static preview
 

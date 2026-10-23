@@ -19,6 +19,7 @@ export function volumeInfo(title, author='') {
 const normalize=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const normalizeAuthor=value=>normalize(value).split(' ').sort().join(' ');
 export function identity(book){
+  if(book.personal)return String(book.id);
   if(book.kind && book.kind!=='book'){const malId=book.malId||String(book.id).match(/^(?:anime|manga)-(\d+)$/)?.[1];return malId?`${book.kind}-mal-${malId}`:String(book.id);}
   if(!book.author || book.author==='Unknown author') return String(book.id);
   return normalize(book.title)+'|'+normalizeAuthor(book.author);

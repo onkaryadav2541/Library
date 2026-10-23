@@ -5,15 +5,15 @@ Folio uses six adapters with no paid subscription or embedded API credentials. P
 | Adapter | Official documentation | What Folio requests | Reading behavior |
 | --- | --- | --- | --- |
 | Project Gutenberg / Gutendex | https://gutendex.com/ | Paged title/author/subject search and plain-text editions | Free text in the Folio reader |
-| Open Library | https://openlibrary.org/dev/docs/api/search | Search constrained to `ebook_access:public`; borrowed and unavailable items are excluded | Opens the source's free-reading work page |
-| Google Books | https://developers.google.com/books/docs/v1/using | `filter=free-ebooks`, accepting only `ALL_PAGES` or public-domain access | Opens the source's full reader; quota failures are optional, never fatal |
+| Open Library | https://openlibrary.org/dev/docs/api/search | Default browsing selects public ebook metadata; title searches include wider catalog metadata | Catalog information only; no outbound book-reading action |
+| Google Books | https://developers.google.com/books/docs/v1/using | Free-edition metadata for browsing; broader metadata for title searches | Catalog information only; quota failures are optional, never fatal |
 | AniList | https://docs.anilist.co/ | Public GraphQL anime/manga data, non-adult results, related works, official streaming episode links when supplied | Series guide / official links, not hosted scans or streams |
 | Jikan | https://docs.api.jikan.moe/ | Safe-for-work MyAnimeList discovery, manga volume/chapter counts, numbered anime episode guides | Series guide / official publisher links |
 | Kitsu | https://kitsu.docs.apiary.io/ | Anime/manga discovery with mappings included in one request; episode/chapter guides | Third independent series source; adult entries are excluded |
 
 ## Broad collections without downloading the catalog
 
-Books are fetched from API pages for genres including romance, thriller, mystery, fantasy, adventure, science, history, nonfiction, and reference. There is no need for a separate romance-only API. The existing downloaded starter library is retained as a fallback; expanding the catalog does not write book files to the repository. The providers do not imply that modern copyrighted books or manga volumes are all freely readable.
+Book records are fetched from API pages for genres including romance, thriller, mystery, fantasy, adventure, science, history, nonfiction, and reference. There is no need for a separate romance-only API. The existing downloaded starter library is retained as a fallback; expanding the catalog does not write book files to the repository. The providers do not imply that modern copyrighted books or manga volumes are all freely readable.
 
 `GET /api/discover?provider=openlibrary&kind=book&genre=romance&page=1`
 
@@ -32,7 +32,7 @@ Every discovery response has `provider`, `books`, `hasMore`, `total`, and `page`
 - Searches debounce for 450 milliseconds and cancel stale client requests.
 - Duplicate requests share one in-flight server request.
 - Fresh metadata is reused for five minutes. Stale metadata can be served for a day while a background refresh runs.
-- Metadata cache files live under the operating system's temporary `folio-api-v3` folder, outside the repository. The cache is memory-bounded and periodically pruned on disk. Browser session metadata is bounded separately.
+- Metadata cache files live under the operating system's temporary `folio-api-v4` folder, outside the repository. The cache is memory-bounded and periodically pruned on disk. Browser session metadata is bounded separately.
 - Failed searches have a short cooldown. A Retry button lets the user retry unavailable sources without refetching successful ones.
 - The grid renders at most 24 cards per result page, regardless of the catalog size. Covers load lazily.
 - Plain-text reading continues to measure only the visible pages. The provider changes do not re-paginate the entire book.
@@ -46,3 +46,7 @@ Anime/manga metadata uses MyAnimeList IDs when available to merge the same serie
 ## Outbound hosts
 
 The Node server needs `gutendex.com`, `www.gutenberg.org`, `openlibrary.org`, `www.googleapis.com`, `graphql.anilist.co`, `api.jikan.moe`, and `kitsu.io` / `kitsu.app`. The browser loads covers from the providers' image hosts, including `covers.openlibrary.org`, `cdn.myanimelist.net`, `s4.anilist.co`, and `media.kitsu.io` / `media.kitsu.app`.
+
+## On-site reading policy
+
+Read now is the default and includes only actual in-app text. Searching a title also surfaces metadata-only editions, marked Catalog only. No book listing has an external Read button or an automatic redirect. Personal EPUB/TXT imports stay in browser IndexedDB; they are private to that browser and do not provide a public distribution license. Gutenberg text and private imports use Folio’s own reader. Source citations remain optional attribution links.

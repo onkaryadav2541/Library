@@ -15,10 +15,10 @@ test('Open Library filters out borrowed and unavailable editions',async()=>{
   assert.match(new URL(url).searchParams.get('q'),/ebook_access:public/);
   return {numFound:3,docs:[{key:'/works/OL1W',title:'Free thriller',author_name:['Writer'],ebook_access:'public',ia:['item']},{key:'/works/OL2W',title:'Borrow only',ebook_access:'borrowable'},{key:'/works/OL3W',title:'No scan',ebook_access:'no_ebook'}]};
  });
- assert.equal(result.books.length,1);assert.equal(result.books[0].access,'full');assert.equal(result.books[0].reader,'external');assert.equal(result.books[0].genre,'thriller');
+ assert.equal(result.books.length,1);assert.equal(result.books[0].access,'external-only');assert.equal(result.books[0].reader,'unavailable');assert.equal(result.books[0].genre,'thriller');
 });
 test('Google Books only exposes complete free reading, never a partial preview',async()=>{
- const result=await discover('googlebooks',{q:'romance'},async url=>{
+ const result=await discover('googlebooks',{genre:'romance'},async url=>{
   assert.equal(new URL(url).searchParams.get('filter'),'free-ebooks');
   return {totalItems:2,items:[{id:'full',volumeInfo:{title:'Free',authors:['A']},accessInfo:{viewability:'ALL_PAGES',webReaderLink:'http://books.google.com/books?id=full'}},{id:'sample',volumeInfo:{title:'Sample'},accessInfo:{viewability:'PARTIAL'}}]};
  });
@@ -63,4 +63,16 @@ test('Kitsu supplies a third anime source without one mapping request per title'
   return {data:[{id:'1',attributes:{canonicalTitle:'Cowboy Bebop',ageRating:'R',episodeCount:26,slug:'cowboy-bebop'},relationships:{mappings:{data:[{id:'m1'}]}}},{id:'2',attributes:{canonicalTitle:'Adult',nsfw:true}}],included:[{id:'m1',attributes:{externalSite:'myanimelist/anime',externalId:'1'}}],meta:{count:20},links:{next:'next'}};
  });
  assert.equal(result.books.length,1);assert.equal(result.books[0].malId,1);assert.equal(result.books[0].episodes,26);assert.equal(result.hasMore,true);
+});
+
+test('modern-title searches return catalog metadata without inventing reading access',async()=>{
+ const result=await discover('openlibrary',{q:'The Alchemist'},async url=>{assert.doesNotMatch(new URL(url).searchParams.get('q'),/ebook_access:public/);return {numFound:1,docs:[{key:'/works/OL1W',title:'The Alchemist',author_name:['Paulo Coelho'],ebook_access:'borrowable'}]};});
+ assert.equal(result.books.length,1);assert.equal(result.books[0].reader,'unavailable');assert.equal(result.books[0].access,'catalog');
+});
+test('a private imported copy never merges its text identity with a catalog edition',()=>{
+ const books=mergeBooks([{id:1,title:'A Tale',author:'Writer',reader:'text'},{id:'personal-123',title:'A Tale',author:'Writer',personal:true,reader:'text'}]);assert.equal(books.length,2);assert.ok(books.some(b=>b.id==='personal-123'&&b.personal));
+});
+
+test('Google modern-title search is metadata-only and does not promise partial samples as full text',async()=>{
+ const result=await discover('googlebooks',{q:'Modern title'},async url=>{assert.equal(new URL(url).searchParams.has('filter'),false);return {totalItems:1,items:[{id:'modern',volumeInfo:{title:'Modern title',authors:['Writer']},accessInfo:{viewability:'PARTIAL'}}]};});assert.equal(result.books[0].reader,'unavailable');assert.equal(result.books[0].access,'catalog');
 });
