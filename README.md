@@ -1,6 +1,6 @@
 # Folio
 
-A free online library with original book-cover images, 48 downloaded books, live Project Gutenberg discovery, manga/anime discovery, and a fast book-style reader.
+An API-driven free library with original book covers, six discovery sources, ordered volumes and episode guides, and a fast book-style reader.
 
 ## See the website on Windows
 
@@ -16,13 +16,19 @@ Open **http://127.0.0.1:5199** in your browser. Keep the server terminal running
 
 On other platforms, run `npm start` (port 3000 by default), or set `PORT` to another available port.
 
-## Collections
+## API-driven collections
 
-- **Books:** 48 complete downloaded public-domain texts and source cover images are available immediately. Search, genre filters, and Explore more query Gutendex's larger Project Gutenberg catalog (over 79,000 catalog records at development time). Not every record has a readable plain-text edition, so results are filtered for supported formats. The full server retrieves uncached book text and caches it. External catalog size and availability can change.
-- **Manga:** a featured collection plus live, safe-for-work Jikan search. Series details link to official publishers for chapters. Free access depends on the title, publisher, and region; the app does not host copyrighted manga scans or promise every chapter is free.
-- **Anime:** a series guide with descriptions and MyAnimeList information via Jikan. Anime is not a book format; this collection does not stream video.
+Folio searches **six free-source adapters**: Project Gutenberg, Open Library, Google Books, AniList, Jikan, and Kitsu. Books use the first three; anime and manga use the latter three. Sources load independently with per-source status, search caching, fallback, and retry. No paid subscription or embedded API key is required; public provider quotas still apply.
 
-API keys and accounts are not required. The external sources must be reachable from the computer running the server. Jikan has rate limits; requests are cached and searches are debounced. Catalog errors leave the downloaded books and featured series available.
+Romance, thriller, mystery, fantasy, nonfiction, reference, and other genres search the online catalogs. Open Library excludes borrow-only items. Google Books excludes partial previews. The Read inside Folio filter restricts results to in-app text; other free editions open the source reader. The existing 48 downloaded books remain an instant fallback. **Adding collection coverage does not require adding files to `public/books/`.**
+
+Anime/manga discovery includes volume/chapter/episode counts when available, numerically ordered episode guides, source-provided related series, and official reading links. It does not promise unlimited free copyrighted manga or video. Real source quotas and regional availability apply.
+
+Numbered books have a volume picker. Volume I / II / X and 1 / 2 / 10 sort numerically; different volumes remain separate when duplicate editions are merged. Only volumes actually found in the sources are offered. Find more volumes searches for the rest of a series.
+
+The result grid renders 24 cards per page. Searches are debounced, stale requests are cancelled, and server metadata uses a persistent temporary cache with stale-while-revalidate behavior. A slow source does not block faster results.
+
+See [Data sources, behavior, and API documentation](docs/data-sources.md) for source contracts, limitations, caching, and endpoint examples.
 
 ## Reader
 
@@ -40,10 +46,10 @@ Serving `public/` with a static server supports downloaded books, covers, reader
 npm test
 ```
 
-The dependency-free Node test suite covers Windows/Linux path handling, application assets, full local texts, API validation, ETags, gzip, and local text retrieval. Optional browser tests are described in `test/browser/README.md`; they require Playwright and Chromium and run separately from `npm test`.
+The dependency-free Node suite covers Windows/Linux paths, assets, text reading, source adapters, free-access filtering, cache persistence and fallback, deduplication, volume/episode order, and API validation. Adapter tests use representative fixtures so provider outages do not turn local tests into random failures. Live connectivity is checked separately. Optional browser tests are described in `test/browser/README.md`; they require Playwright and Chromium and run separately from `npm test`.
 
 ## Sources & deployment
 
 Downloaded text and cover metadata come from Project Gutenberg / Gutendex; the original 12 texts were sourced through the GITenberg mirror. The Gutenberg license and attribution remain in every text file, accessible through the reader's source link. Book covers are source edition artwork, not AI-generated images. Public-domain status varies by country; check the source edition's terms in your location. Featured-series descriptions are brief editorial summaries; covers and live series metadata are supplied by Open Library / MyAnimeList / Jikan, with source links.
 
-For deployment, use a host supporting a persistent Node process and set the start command to `npm start`. Required outbound hosts: `gutendex.com`, `www.gutenberg.org`, `api.jikan.moe`; remote series covers use `covers.openlibrary.org` and `cdn.myanimelist.net`. Modern Node enables injected proxy settings when that API is available; older Node continues with standard direct networking. Keep TLS verification enabled. There is no public deployment created by this repository.
+For deployment, use a host supporting a persistent Node process and set the start command to `npm start`. Outbound source and cover hosts are listed in `docs/data-sources.md`. Modern Node enables injected proxy settings when that API is available; older Node continues with standard direct networking. Keep TLS verification enabled. There is no public deployment created by this repository.

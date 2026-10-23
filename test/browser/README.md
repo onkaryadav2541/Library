@@ -9,3 +9,5 @@ node test/browser/check.mjs
 ```
 
 If using a system Chromium, set `CHROMIUM_PATH` to its executable. The check writes four ignored screenshot files. It does not replace live external-source validation; Jikan discovery can be unavailable due to network restrictions or rate limits while featured series remain usable.
+
+`multi-source.mjs` is a separate deterministic browser check. It simulates independently responding providers, one failed source, API-only books, duplicate anime, volume ordering/switching, and episode ordering. Set `FOLIO_URL` (default port 5210) and `CHROMIUM_PATH` as needed, then run `node test/browser/multi-source.mjs`. It uses fixture responses and does not claim live API availability.

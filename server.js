@@ -4,6 +4,9 @@ import {resolve, extname} from 'node:path';
 import {gzip} from 'node:zlib';
 import {promisify} from 'node:util';
 import {isWithinRoot} from './safe-path.js';
+import {PROVIDERS,discover,seriesDetails} from './lib/providers.js';
+import {createApiCache} from './lib/api-cache.js';
+const discoveryCache=createApiCache();
 
 // Older Node versions do not expose this API; normal direct networking still works.
 http.setGlobalProxyFromEnv?.();
@@ -33,7 +36,21 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (!['GET','HEAD'].includes(req.method)) return send(res, 405, 'Method not allowed', undefined, {Allow:'GET, HEAD'});
-    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:2}), types['.json']);
+    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:3}), types['.json']);
+    if (url.pathname === '/api/providers') return send(res,200,JSON.stringify(PROVIDERS),types['.json']);
+    if (url.pathname === '/api/discover') {
+      const provider=url.searchParams.get('provider'),kind=url.searchParams.get('kind')||'book';
+      if(!PROVIDERS[provider]?.kinds.includes(kind))return send(res,400,'Invalid provider or collection');
+      const options={kind,q:(url.searchParams.get('q')||'').trim().slice(0,180),genre:(url.searchParams.get('genre')||'all').slice(0,40),page:Math.max(1,Math.min(1000,Number.parseInt(url.searchParams.get('page'),10)||1))};
+      const result=await discoveryCache.get(JSON.stringify({provider,...options}),()=>discover(provider,options));
+      return send(res,200,JSON.stringify(result),types['.json'],{'Cache-Control':'private, max-age=60','X-Folio-Cache':result.cache});
+    }
+    if (url.pathname === '/api/series-details') {
+      const options={provider:url.searchParams.get('provider'),kind:url.searchParams.get('kind'),id:url.searchParams.get('id'),page:Math.max(1,Math.min(100,Number.parseInt(url.searchParams.get('page'),10)||1))};
+      if(!['anilist','jikan','kitsu'].includes(options.provider)||!['anime','manga'].includes(options.kind)||!/^\d{1,9}$/.test(options.id||''))return send(res,400,'Invalid series');
+      const result=await discoveryCache.get('detail:'+JSON.stringify(options),()=>seriesDetails(options));
+      return send(res,200,JSON.stringify(result),types['.json'],{'Cache-Control':'private, max-age=300'});
+    }
     if (url.pathname === '/api/books') {
       const target = new URL('https://gutendex.com/books/');
       for (const key of ['search','topic']) if (url.searchParams.get(key)) target.searchParams.set(key, url.searchParams.get(key).slice(0, 200));

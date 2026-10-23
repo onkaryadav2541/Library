@@ -29,3 +29,5 @@ test('local full-text API works without contacting an external provider', async 
 test('series endpoint validates the collection', async () => {
   assert.equal((await fetch(base + '/api/series?kind=invalid')).status, 400);
 });
+test('provider registry exposes six free-source adapters',async()=>{const data=await(await fetch(base+'/api/providers')).json();assert.equal(Object.keys(data).length,6);assert.ok(data.openlibrary.kinds.includes('book'));assert.ok(data.anilist.kinds.includes('anime'));});
+test('discovery rejects arbitrary provider destinations and malformed series IDs',async()=>{assert.equal((await fetch(base+'/api/discover?provider=https://example.com')).status,400);assert.equal((await fetch(base+'/api/series-details?provider=jikan&kind=anime&id=../secret')).status,400);});
