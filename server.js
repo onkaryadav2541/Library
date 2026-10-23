@@ -6,6 +6,8 @@ import {promisify} from 'node:util';
 import {isWithinRoot} from './safe-path.js';
 import {PROVIDERS,discover,seriesDetails} from './lib/providers.js';
 import {createApiCache} from './lib/api-cache.js';
+import {createCoverCache,coverURL} from './lib/covers.js';
+const coverCache=createCoverCache();
 const discoveryCache=createApiCache();
 
 // Older Node versions do not expose this API; normal direct networking still works.
@@ -14,6 +16,7 @@ const root = resolve('public');
 const zip = promisify(gzip);
 const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.txt':'text/plain; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
 const upstreamCache = new Map(), pending = new Map(), compressed = new Map();
+let upstreamBytes=0;const MAX_UPSTREAM_BYTES=24*1024*1024;
 async function upstream(url, ttl = 900000) {
   const cached = upstreamCache.get(url);
   if (cached && cached.expires > Date.now()) return cached;
@@ -23,8 +26,10 @@ async function upstream(url, ttl = 900000) {
     if (!response.ok) throw Error(`Source returned ${response.status}`);
     const body = await response.text();
     const entry = {body, expires:Date.now() + ttl};
-    if (upstreamCache.size >= 80) upstreamCache.delete(upstreamCache.keys().next().value);
-    upstreamCache.set(url, entry); return entry;
+    const size=Buffer.byteLength(body);
+    if(upstreamCache.has(url)){upstreamBytes-=Buffer.byteLength(upstreamCache.get(url).body);upstreamCache.delete(url);}
+    while(upstreamCache.size&&(upstreamCache.size>=80||upstreamBytes+size>MAX_UPSTREAM_BYTES)){const key=upstreamCache.keys().next().value;upstreamBytes-=Buffer.byteLength(upstreamCache.get(key).body);upstreamCache.delete(key);}
+    if(size<=MAX_UPSTREAM_BYTES){upstreamCache.set(url,entry);upstreamBytes+=size;}return entry;
   })();
   pending.set(url, request);
   try { return await request; } finally { pending.delete(url); }
@@ -36,7 +41,11 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (!['GET','HEAD'].includes(req.method)) return send(res, 405, 'Method not allowed', undefined, {Allow:'GET, HEAD'});
-    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:4}), types['.json']);
+    if (url.pathname === '/api/health') return send(res, 200, JSON.stringify({service:'folio',version:5}), types['.json']);
+    if(url.pathname==='/api/cover'){
+      let target;try{target=coverURL(url.searchParams.get('url'));}catch{return send(res,400,'Invalid cover URL');}
+      try{const cover=await coverCache.get(target);return send(res,200,cover.body,cover.type,{'Cache-Control':'public, max-age=86400'});}catch{return send(res,404,'Cover unavailable',undefined,{'Cache-Control':'no-store'});}
+    }
     if (url.pathname === '/api/providers') return send(res,200,JSON.stringify(PROVIDERS),types['.json']);
     if (url.pathname === '/api/discover') {
       const provider=url.searchParams.get('provider'),kind=url.searchParams.get('kind')||'book';
@@ -75,7 +84,9 @@ http.createServer(async (req, res) => {
       // Serve the downloaded edition first even if the client has older metadata.
       try { return send(res, 200, await readFile(resolve(root, 'books', `${id}.txt`)), types['.txt']); } catch {}
       const result = await upstream(`https://www.gutenberg.org/cache/epub/${id}/pg${id}.txt`, 86400000);
-      return send(res, 200, result.body, types['.txt'], {'Cache-Control':'public, max-age=3600'});
+      const headers={'Cache-Control':'public, max-age=3600','Vary':'Accept-Encoding','X-Folio-Content':'fetched-on-demand'};
+      if(/\bgzip\b/.test(req.headers['accept-encoding']||'')){headers['Content-Encoding']='gzip';return send(res,200,await zip(result.body),types['.txt'],headers);}
+      return send(res,200,result.body,types['.txt'],headers);
     }
     let decoded;
     try { decoded = decodeURIComponent(url.pathname); } catch { return send(res, 400, 'Invalid path'); }

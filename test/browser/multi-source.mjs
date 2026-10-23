@@ -13,11 +13,11 @@ await page.route('**/api/discover?*',async route=>{
 });
 await page.route('**/api/series-details?*',route=>route.fulfill({json:{episodes:[{number:10,title:'Ten',url:'https://myanimelist.net/anime/1/episode/10',site:'Episode guide'},{number:2,title:'Two',url:'https://myanimelist.net/anime/1/episode/2',site:'Episode guide'},{number:1,title:'One',url:'https://myanimelist.net/anime/1/episode/1',site:'Episode guide'}],relations:[],hasMore:false}}));
 await page.route('**/api/read?id=90000*',route=>route.fulfill({body:'Chapter 1\n\n'+('This is a test volume with readable text. '.repeat(500)),contentType:'text/plain'}));
-await page.goto(process.env.FOLIO_URL||'http://127.0.0.1:5210');await page.waitForSelector('.book-card');
+await page.goto(process.env.FOLIO_URL||'http://127.0.0.1:5210');await page.waitForSelector('.book-card');await page.locator('#in-app-only').uncheck();
 await page.waitForFunction(()=>document.querySelectorAll('.source-pill:not(.loading)').length>=2);
 assert.ok(await page.locator('.source-pill.loading').count()>=1,'A slow provider should not block successful results');
 await page.selectOption('#provider-filter','openlibrary');await page.waitForSelector('[data-read="ol-OL100W"]');assert.equal(await page.locator('.book-card').count(),1);
-await page.locator('[data-read="ol-OL100W"]').first().click();assert.equal(await page.locator('#details a').count(),0);assert.match(await page.locator('#details').textContent(),/Full text isn’t available/);await page.locator('#close-details').click();
+await page.locator('[data-read="ol-OL100W"]').first().click();assert.equal(await page.locator('#details a').count(),0);assert.match(await page.locator('#details').textContent(),/Full text isn’t supplied/);await page.locator('#close-details').click();
 await page.selectOption('#provider-filter','all');await page.locator('#search').fill('Test Saga');await page.waitForSelector('[data-read="900002"]');await page.locator('[data-read="900002"]').first().click();
 assert.deepEqual(await page.locator('[data-volume]').allTextContents(),['Vol. 1','Vol. 2','Vol. 10']);
 await page.locator('#detail-read').click();await page.waitForFunction(()=>document.querySelector('#left-page').textContent.length>100);assert.equal(await page.locator('#reader-volume').isVisible(),true);assert.equal(await page.locator('#reader-volume').inputValue(),'900002');await page.selectOption('#reader-volume','900010');await page.waitForFunction(()=>document.querySelector('#reader-title').textContent.includes('10'));await page.locator('#close-reader').click();

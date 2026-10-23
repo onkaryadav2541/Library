@@ -76,3 +76,4 @@ test('a private imported copy never merges its text identity with a catalog edit
 test('Google modern-title search is metadata-only and does not promise partial samples as full text',async()=>{
  const result=await discover('googlebooks',{q:'Modern title'},async url=>{assert.equal(new URL(url).searchParams.has('filter'),false);return {totalItems:1,items:[{id:'modern',volumeInfo:{title:'Modern title',authors:['Writer']},accessInfo:{viewability:'PARTIAL'}}]};});assert.equal(result.books[0].reader,'unavailable');assert.equal(result.books[0].access,'catalog');
 });
+test('a catalog title search keeps its selected genre in the upstream query',async()=>{await discover('openlibrary',{q:'haunting',genre:'romance'},async url=>{const query=new URL(url).searchParams.get('q');assert.match(query,/haunting/);assert.match(query,/subject:romance/);return {docs:[],numFound:0};});});

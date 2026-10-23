@@ -32,7 +32,7 @@ Every discovery response has `provider`, `books`, `hasMore`, `total`, and `page`
 - Searches debounce for 450 milliseconds and cancel stale client requests.
 - Duplicate requests share one in-flight server request.
 - Fresh metadata is reused for five minutes. Stale metadata can be served for a day while a background refresh runs.
-- Metadata cache files live under the operating system's temporary `folio-api-v4` folder, outside the repository. The cache is memory-bounded and periodically pruned on disk. Browser session metadata is bounded separately.
+- Metadata cache files live under the operating system's temporary `folio-api-v5` folder, outside the repository. The cache is memory-bounded and periodically pruned on disk. Browser session metadata is bounded separately.
 - Failed searches have a short cooldown. A Retry button lets the user retry unavailable sources without refetching successful ones.
 - The grid renders at most 24 cards per result page, regardless of the catalog size. Covers load lazily.
 - Plain-text reading continues to measure only the visible pages. The provider changes do not re-paginate the entire book.
@@ -49,4 +49,10 @@ The Node server needs `gutendex.com`, `www.gutenberg.org`, `openlibrary.org`, `w
 
 ## On-site reading policy
 
-Read now is the default and includes only actual in-app text. Searching a title also surfaces metadata-only editions, marked Catalog only. No book listing has an external Read button or an automatic redirect. Personal EPUB/TXT imports stay in browser IndexedDB; they are private to that browser and do not provide a public distribution license. Gutenberg text and private imports use Folio’s own reader. Source citations remain optional attribution links.
+Read now is the default and includes only actual in-app text. Searching preserves Read now. Metadata-only editions are shown only when the visitor explicitly turns that filter off. No book listing has an external Read button or an automatic redirect. Personal EPUB/TXT imports stay in browser IndexedDB; they are private to that browser and do not provide a public distribution license. Gutenberg text and private imports use Folio’s own reader. Source citations remain optional attribution links.
+
+## On-demand full text and covers
+
+`/api/read?id=<Gutenberg ID>` fetches a selected readable book on demand and compresses its response. No manual TXT import or per-title repository file is needed. Existing local texts are an optional fallback. The remote text/metadata response cache is bounded to 24 MB.
+
+`/api/cover?url=<encoded source image URL>` accepts only HTTPS image-provider hosts, validates redirect destinations and content type, caps each image at 1 MB, and caches at most 8 MB. It limits upstream concurrency to four requests. Cover data is not used to infer reading rights.

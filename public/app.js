@@ -15,7 +15,7 @@ let providerFilter='all',inAppOnly=true;
 const canRead=book=>!!(book.personal||book.local||book.reader==='text');
 const providerNames={gutenberg:'Project Gutenberg',openlibrary:'Open Library',googlebooks:'Google Books',anilist:'AniList',jikan:'Jikan',kitsu:'Kitsu'};
 let sourceState=new Map();
-const activeProviders=()=>kind==='book'?(serverMode?['gutenberg','openlibrary','googlebooks']:['gutenberg']):(serverMode?['anilist','jikan','kitsu']:['jikan']);
+const activeProviders=()=>kind==='book'?(serverMode&&!inAppOnly?['gutenberg','openlibrary','googlebooks']:['gutenberg']):(serverMode?['anilist','jikan','kitsu']:['jikan']);
 const queueRender=()=>{cancelAnimationFrame(renderFrame);renderFrame=requestAnimationFrame(render);};
 const keyOf = b => String(b.id);
 const kindOf = b => b.kind || 'book';
@@ -37,13 +37,16 @@ function render() {
   $('#result-count').textContent = `${list.length?windowStart+1:0}–${Math.min(visible, list.length)} of ${list.length} ${kind === 'book' ? 'on this shelf' : 'series'}`;
   $('#books').innerHTML = list.length ? list.slice(windowStart, visible).map(b => {
     const kept = saved.some(s => keyOf(s) === keyOf(b));
-    const cover = safeImage(b.cover || `/covers/${b.id}.jpg`);
+    const cover = coverCandidates(b)[0]||'';
     const label=kindOf(b)==='book'?(canRead(b)?b.volume!=null?'Select volume':'Read here':'Book details'):'Explore series';
-    return `<article class="book-card"><div class="cover-wrap"><button class="cover" data-read="${escapeHtml(b.id)}" aria-label="${label}: ${escapeHtml(b.title)}"><img src="${escapeHtml(cover)}" alt="${escapeHtml(b.title)} cover" width="200" height="300" loading="lazy" decoding="async"></button><button class="save-book ${kept ? 'saved' : ''}" data-save="${escapeHtml(b.id)}" aria-label="${kept ? 'Remove from' : 'Add to'} bookshelf: ${escapeHtml(b.title)}" aria-pressed="${kept}">${kept ? '♥' : '♡'}</button><button class="read-overlay" data-read="${escapeHtml(b.id)}">${label}${kindOf(b)==='book'?' →':' ↗'}</button></div><div class="book-info"><h4 title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</h4><p>${escapeHtml(b.author)}</p><div class="book-meta"><span class="genre-label">${escapeHtml(b.genre || b.kind || 'classics')}</span><span class="availability ${b.local ? 'local' : ''}">${kindOf(b) !== 'book' ? 'Series guide' : b.local ? 'Ready to read' : canRead(b)?'Read in Folio':'Catalog only'}</span></div><span class="book-source">${escapeHtml(b.source||'Project Gutenberg')}${b.volume!=null?' · Vol. '+escapeHtml(b.volume):''}</span></div></article>`;
-  }).join('') : `<div class="empty-state"><h3>${view === 'saved' ? 'Make a little room for your favorites.' : view === 'history' ? 'Your next chapter starts here.' : loading ? 'Looking through the shelves…' : 'Let’s try another shelf.'}</h3><p>${view === 'saved' ? 'Tap a heart on a book or series to keep it here.' : view === 'history' ? 'Open a book and your reading progress will appear here.' : loading ? 'Searching the online collection.' : 'Try a different title, author, or genre.'}</p></div>`;
-  document.querySelectorAll('.cover img').forEach(img => img.addEventListener('error', () => {
-    const fallback = document.createElement('span'); fallback.className = 'cover-fallback'; fallback.textContent = img.alt.replace(/ cover$/, ''); img.replaceWith(fallback);
-  }, {once:true}));
+    return `<article class="book-card"><div class="cover-wrap"><button class="cover" data-read="${escapeHtml(b.id)}" aria-label="${label}: ${escapeHtml(b.title)}"><img src="${escapeHtml(cover)}" alt="${escapeHtml(b.title)} cover" width="200" height="300" loading="lazy" decoding="async" data-book-cover="${escapeHtml(b.id)}"></button><button class="save-book ${kept ? 'saved' : ''}" data-save="${escapeHtml(b.id)}" aria-label="${kept ? 'Remove from' : 'Add to'} bookshelf: ${escapeHtml(b.title)}" aria-pressed="${kept}">${kept ? '♥' : '♡'}</button><button class="read-overlay" data-read="${escapeHtml(b.id)}">${label}${kindOf(b)==='book'?' →':' ↗'}</button></div><div class="book-info"><h4 title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</h4><p>${escapeHtml(b.author)}</p><div class="book-meta"><span class="genre-label">${escapeHtml(b.genre || b.kind || 'classics')}</span><span class="availability ${b.local ? 'local' : ''}">${kindOf(b) !== 'book' ? 'Series guide' : b.local ? 'Ready to read' : canRead(b)?'Read in Folio':'Catalog only'}</span></div><span class="book-source">${escapeHtml(b.source||'Project Gutenberg')}${b.volume!=null?' · Vol. '+escapeHtml(b.volume):''}</span></div></article>`;
+  }).join('') : `<div class="empty-state"><h3>${view === 'saved' ? 'Make a little room for your favorites.' : view === 'history' ? 'Your next chapter starts here.' : loading ? 'Looking through the shelves…' : kind==='book'&&inAppOnly?'No readable edition found.':'Let’s try another shelf.'}</h3><p>${view === 'saved' ? 'Tap a heart on a book or series to keep it here.' : view === 'history' ? 'Open a book and your reading progress will appear here.' : loading ? 'Searching the online collection.' : kind==='book'&&inAppOnly?'Try an author or another title. Modern copyrighted books need a licensed full-text source; catalog records alone are not readable editions.':'Try a different title, author, or genre.'}</p></div>`;
+  document.querySelectorAll('.cover img').forEach(img=>{
+    const book=findBook(img.dataset.bookCover),candidates=coverCandidates(book);let index=0;
+    const fallback=()=>{if(++index<candidates.length){img.src=candidates[index];return;}const placeholder=document.createElement('span');placeholder.className='cover-fallback';const title=document.createElement('strong');title.textContent=book?.title||'Book';const note=document.createElement('small');note.textContent='Cover not supplied by source';placeholder.append(title,note);img.replaceWith(placeholder);};
+    img.addEventListener('error',fallback);img.addEventListener('load',()=>{if(img.naturalWidth<32||img.naturalHeight<32)fallback();});
+    if(!candidates.length)fallback();
+  });
   $('#previous-results').hidden=windowStart===0;
   const personal = ['saved','history'].includes(view);
   $('#load-more').hidden = personal ? visible >= list.length : !hasMore && visible >= list.length;
@@ -52,6 +55,13 @@ function render() {
   $('.genres').hidden = kind !== 'book';
   renderSources();
   $('#search').placeholder = kind === 'book' ? 'Search titles, authors, or your next favorite…' : `Search ${kind} titles…`;
+}
+function coverCandidates(book){
+ if(!book)return [];
+ const sources=[book.cover,...(book.coverAlternatives||[])].filter(Boolean);
+ if(book.local||book.personal){if(!sources.length&&book.local)sources.push(`/covers/${book.id}.jpg`);}
+ else if(book.provider==='gutenberg'||/^\d+$/.test(String(book.id)))sources.push(`https://www.gutenberg.org/cache/epub/${book.id}/pg${book.id}.cover.medium.jpg`);
+ return [...new Set(sources.map(safeImage).filter(Boolean).map(url=>new URL(url,location.origin).origin===location.origin?url:serverMode?'/api/cover?'+new URLSearchParams({url}):url))];
 }
 function safeImage(value) {
   try { const url = new URL(value, location.origin); return url.protocol === 'https:' || url.origin === location.origin ? url.href : ''; } catch { return ''; }
@@ -98,6 +108,7 @@ function normalizeSeries(series) {
   return {id:`${kind}-${series.mal_id}`, kind, title:series.title_english || series.title, author:series.authors?.map(a => a.name).join(', ') || series.studios?.map(a => a.name).join(', ') || (kind === 'manga' ? 'Manga series' : 'Anime series'), genre:kind, tags:series.genres?.map(g => g.name), cover:series.images?.jpg?.large_image_url || series.images?.jpg?.image_url, description:series.synopsis || '', score:series.score, status:series.status, episodes:series.episodes, sourceUrl:series.url, officialUrl:'https://mangaplus.shueisha.co.jp/'};
 }
 function renderSources(){
+ $('#in-app-only').checked=inAppOnly;
  const providers=activeProviders();
  const select=$('#provider-filter');
  const options=['all',...providers,...(kind==='book'&&personalBooks.length?['personal']:[])];
@@ -108,12 +119,12 @@ function renderSources(){
  $('#in-app-only').closest('label').hidden=kind!=='book';
  $('#source-status').innerHTML=providers.map(p=>{const state=sourceState.get(p);return `<span class="source-pill ${state?.loading?'loading':state?.error?'unavailable':''}">${providerNames[p]} <small>${state?.loading?'Searching':state?.error?'Unavailable':state?.count!=null?state.count+' found':'Ready'}</small></span>`}).join('')+(Array.from(sourceState.values()).some(s=>s.error)?'<button id="retry-sources">Retry unavailable sources</button>':'');
  const retry=$('#retry-sources');if(retry)retry.onclick=()=>loadRemote({retry:true});
- $('#source-summary').textContent=serverMode?(kind==='book'?'Read here stays in Folio. Catalog-only titles have no full text.':'Results arrive as each source responds.'):'Use npm start for all six sources and full reading access.';
+ $('#source-summary').textContent=serverMode?(kind==='book'?'API books open here on demand. No TXT uploads needed.':'Results arrive as each source responds.'):'Use npm start for all six sources and full reading access.';
 }
-$('#provider-filter').onchange=event=>{providerFilter=event.target.value;if(['openlibrary','googlebooks'].includes(providerFilter)){inAppOnly=false;$('#in-app-only').checked=false;}windowStart=0;visible=24;render();};
-$('#in-app-only').onchange=event=>{inAppOnly=event.target.checked;windowStart=0;visible=24;render();};
+$('#provider-filter').onchange=event=>{providerFilter=event.target.value;windowStart=0;visible=24;render();};
+$('#in-app-only').onchange=event=>{inAppOnly=event.target.checked;providerFilter='all';resetResults();loadRemote({reset:true});};
 function getCached(key){try{const value=JSON.parse(sessionStorage.getItem(key));return value&&Date.now()-value.time<300000?value.data:null;}catch{return null;}}
-function cacheResult(key,data){try{const keys=Object.keys(sessionStorage).filter(k=>k.startsWith('folio-api-v4:'));if(keys.length>=45)sessionStorage.removeItem(keys[0]);sessionStorage.setItem(key,JSON.stringify({time:Date.now(),data}));}catch{}}
+function cacheResult(key,data){try{const keys=Object.keys(sessionStorage).filter(k=>k.startsWith('folio-api-v5:'));if(keys.length>=45)sessionStorage.removeItem(keys[0]);sessionStorage.setItem(key,JSON.stringify({time:Date.now(),data}));}catch{}}
 async function loadRemote({reset=false,silent=false,retry=false}={}){
  if(['saved','history'].includes(view))return;
  if(loading&&!reset&&!retry)return;
@@ -126,7 +137,7 @@ async function loadRemote({reset=false,silent=false,retry=false}={}){
  providers.forEach(p=>sourceState.set(p,{...sourceState.get(p),loading:true,error:false}));loading=true;if(!silent)render();
  await Promise.allSettled(providers.map(async provider=>{
   const previous=sourceState.get(provider),page=reset?1:previous?.page||1;
-  const params=new URLSearchParams({provider,kind,q:query,genre,page:String(page)}),cacheKey='folio-api-v4:'+params;
+  const params=new URLSearchParams({provider,kind,q:query,genre,page:String(page)}),cacheKey='folio-api-v5:'+params;
   try{
    let data=getCached(cacheKey);
    if(!data){
@@ -163,7 +174,7 @@ $('#load-more').onclick=async()=>{
  if(selectedBooks().length>before){windowStart=before;visible=before+24;render();$('.catalog').scrollIntoView({behavior:'smooth',block:'start'});}
 };
 function resetResults() { windowStart=0;visible=24;controller?.abort();requestId++;loading=false;remote=[];sourceState=new Map();hasMore=true;render(); }
-$('#search').addEventListener('input', event => { query = event.target.value.trim();inAppOnly=!query;$('#in-app-only').checked=inAppOnly;resetResults(); clearTimeout(searchTimer); searchTimer = setTimeout(() => loadRemote({reset:true}), 450); });
+$('#search').addEventListener('input', event => { query = event.target.value.trim();resetResults(); clearTimeout(searchTimer); searchTimer = setTimeout(() => loadRemote({reset:true}), 450); });
 $('#search').addEventListener('keydown', event => { if (event.key === 'Enter') { clearTimeout(searchTimer); loadRemote({reset:true}); } });
 $('.genres').onclick = event => {
   const button = event.target.closest('[data-genre]'); if (!button) return;
@@ -209,11 +220,11 @@ function openDetails(book){
  const official=externalURL(book.officialUrl)||'https://mangaplus.shueisha.co.jp/';
  const volumes=isBook?orderVolumes(allBooks(),book):[];
  const stats=[book.volumes?`<span>Published volumes<strong>${escapeHtml(book.volumes)}</strong></span>`:'',book.chapters?`<span>Chapters<strong>${escapeHtml(book.chapters)}</strong></span>`:'',book.episodes?`<span>Episodes<strong>${escapeHtml(book.episodes)}</strong></span>`:'',book.year?`<span>First published<strong>${escapeHtml(String(book.year).slice(0,4))}</strong></span>`:''].join('');
- const primary=isBook?(canRead(book)?'<button class="primary" id="detail-read">Read here →</button>':'<p class="availability-note"><strong>Full text isn’t available in Folio.</strong><br>This is a catalog listing. Add an EPUB or TXT copy you own to read it here.</p><button class="primary" id="detail-import">Add my copy →</button>'):`<a class="primary" href="${escapeHtml(manga?official:source)}" target="_blank" rel="noopener noreferrer">${manga?'Find official chapters':'Explore series guide'} ↗</a>`;
+ const primary=isBook?(canRead(book)?'<button class="primary" id="detail-read">Read here →</button>':'<p class="availability-note"><strong>Full text isn’t supplied by this API.</strong><br>This title is a catalog listing, not a book available to read here.</p><button class="primary" id="detail-readable">Find readable books →</button>'):`<a class="primary" href="${escapeHtml(manga?official:source)}" target="_blank" rel="noopener noreferrer">${manga?'Find official chapters':'Explore series guide'} ↗</a>`;
  $('#detail-content').innerHTML=`<div class="detail-layout"><img class="detail-cover" src="${escapeHtml(safeImage(book.cover))}" alt="${escapeHtml(book.title)} cover"><div class="detail-copy"><div class="eyebrow">${isBook?(canRead(book)?'READ IN FOLIO':'BOOK CATALOG'):manga?'MANGA COLLECTION':'ANIME DISCOVERY'}</div><h2>${escapeHtml(book.title)}</h2><div class="detail-meta">${escapeHtml(book.author)}${book.score?' · '+escapeHtml(book.score)+'/10':''}</div><div class="detail-stat-grid">${stats}</div><p>${escapeHtml(book.description||(isBook?(canRead(book)?'Open this edition in your Folio reader.':'Book information is available, but the full text is not licensed for reading here.'):'Explore the story and its place in the series.'))}</p>${primary}<p class="source-note">${isBook?(canRead(book)?'Your reading stays inside Folio.':'A catalog API supplies book information, not permission to distribute the full text.'):manga?'Official reading opens on the publisher’s website. Free chapters and availability vary by title and region.':'Episode guides and official streaming links appear below when the source supplies them.'}</p>${source&&!isBook?`<a class="secondary" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">Source details ↗</a>`:''}</div></div><div id="detail-extra" class="detail-extra"></div>`;
  if(!$('#details').open)$('#details').showModal();
  const read=$('#detail-read');if(read)read.onclick=()=>{closeDetails();readInApp(book);};
- const importButton=$('#detail-import');if(importButton)importButton.onclick=()=>$('#personal-file').click();
+ const readableButton=$('#detail-readable');if(readableButton)readableButton.onclick=()=>{closeDetails();inAppOnly=true;$('#in-app-only').checked=true;providerFilter='all';setView('browse');resetResults();loadRemote({reset:true});};
  if(isBook){
   const host=$('#detail-extra');
   host.innerHTML=(book.seriesTitle?`<h3>${escapeHtml(book.seriesTitle)} · Volumes</h3><p class="detail-collection-note">Available volumes from the current results, in numeric order.</p><div class="volume-picker">${volumes.map(b=>`<button data-volume="${escapeHtml(b.id)}" class="${String(b.id)===String(book.id)?'current':''}">Vol. ${b.volume}</button>`).join('')}</div><button id="find-volumes" class="secondary">Find more volumes</button>`:'');
@@ -229,7 +240,7 @@ async function loadSeriesDetail(book,token,page=1){
  let result=null;
  for(const provider of providers){
   try{
-   const params=new URLSearchParams({...provider,kind:book.kind,page:String(page)}),key='folio-api-v4:detail:'+params;
+   const params=new URLSearchParams({...provider,kind:book.kind,page:String(page)}),key='folio-api-v5:detail:'+params;
    result=getCached(key);
    if(!result){const response=await fetch(`/api/series-details?${params}`,{signal:AbortSignal.any([detailAbort.signal,AbortSignal.timeout(6000)])});if(!response.ok)throw Error();result=await response.json();cacheResult(key,result);}
    break;

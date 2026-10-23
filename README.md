@@ -20,7 +20,7 @@ On other platforms, run `npm start` (port 3000 by default), or set `PORT` to ano
 
 Folio searches **six free-source adapters**: Project Gutenberg, Open Library, Google Books, AniList, Jikan, and Kitsu. Books use the first three; anime and manga use the latter three. Sources load independently with per-source status, search caching, fallback, and retry. No paid subscription or embedded API key is required; public provider quotas still apply.
 
-Romance, thriller, mystery, fantasy, nonfiction, reference, and other genres search the online catalogs. Read now shows only books with text that Folio can render. Searches also include catalog-only titles, clearly marked when their full text is unavailable. Book clicks stay in Folio. Catalog-only listings have an Add my copy action instead of redirecting readers to another library. The existing 48 downloaded books remain an instant fallback. **Adding collection coverage does not require adding files to `public/books/`.**
+Romance, thriller, mystery, fantasy, nonfiction, reference, and other genres search the online catalogs. Read now shows only books with text that Folio can render. Read now stays enabled during searches. You can explicitly turn it off to inspect catalog-only titles, which are not presented as readable books. Book clicks stay in Folio. Catalog-only listings explain that full text is unavailable; they do not tell visitors to upload files as the solution. The existing 48 downloaded books remain an instant fallback. **Adding collection coverage does not require adding files to `public/books/`.**
 
 Anime/manga discovery includes volume/chapter/episode counts when available, numerically ordered episode guides, source-provided related series, and official reading links. It does not promise unlimited free copyrighted manga or video. Real source quotas and regional availability apply.
 
@@ -59,3 +59,9 @@ The dependency-free Node suite covers Windows/Linux paths, assets, text reading,
 Downloaded text and cover metadata come from Project Gutenberg / Gutendex; the original 12 texts were sourced through the GITenberg mirror. The Gutenberg license and attribution remain in every text file, accessible through the reader's source link. Book covers are source edition artwork, not AI-generated images. Public-domain status varies by country; check the source edition's terms in your location. Featured-series descriptions are brief editorial summaries; covers and live series metadata are supplied by Open Library / MyAnimeList / Jikan, with source links.
 
 For deployment, use a host supporting a persistent Node process and set the start command to `npm start`. Outbound source and cover hosts are listed in `docs/data-sources.md`. Modern Node enables injected proxy settings when that API is available; older Node continues with standard direct networking. Keep TLS verification enabled. There is no public deployment created by this repository.
+
+## API reading and page weight
+
+Visitors do not need to add TXT files. A readable API book is fetched only when opened; `/api/read` retrieves its text and returns it compressed to Folio’s reader. It is not written into the repository. Only the opened book is transferred, not the entire collection. Remote text caches are bounded to 24 MB of server memory; browser reading caches hold a limited number of recent books. Existing starter files are a fallback and are not all loaded on page visit.
+
+Remote cover images use a restricted same-origin proxy with an 8 MB memory cache and at most four concurrent upstream requests. Alternate ISBN covers are tried when supplied. If the source has no real cover, the interface labels that absence instead of pretending a placeholder is original artwork.
