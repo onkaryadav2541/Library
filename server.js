@@ -1,6 +1,7 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
+import {isWithinRoot} from './safe-path.js';
 const root=resolve('public');
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.txt':'text/plain','.svg':'image/svg+xml'};
 http.createServer(async(req,res)=>{
@@ -21,7 +22,7 @@ http.createServer(async(req,res)=>{
   res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});return res.end(await response.text());
  }
  const file=resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
- if(!file.startsWith(root+'/')){res.writeHead(403);return res.end();}
+ if(!isWithinRoot(root,file)){res.writeHead(403);return res.end();}
  const data=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream'});res.end(data);
  }catch(e){res.writeHead(req.url.startsWith('/api/')?502:404,{'Content-Type':'text/plain'});res.end(req.url.startsWith('/api/')?'The book service is unavailable. Please try again later.':'Not found');}
 }).listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log('Folio listening on port '+(process.env.PORT||3000)));
