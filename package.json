@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --use-env-proxy server.js",
-    "start": "node --use-env-proxy server.js",
-    "test": "node --test"
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=24.5"
+    "node": ">=22"
   }
 }

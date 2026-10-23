@@ -1,49 +1,175 @@
-const $=s=>document.querySelector(s);
-const readStored=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
-let saved=readStored('folio-saved',[]),history=readStored('folio-history',[]),positions=readStored('folio-positions',{}),catalog=[],remote=[],genre='all',view='discover',query='',sortTitle=false,apiPage=1,hasMore=true,loading=false,currentBook=null,rawText='',pages=[],pageIndex=0,fontSize=16,loadToken=0,searchTimer,toastTimer;
-const persist=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{toast('Your browser cannot save reading progress.')}};
-const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function toast(s){$('#toast').textContent=s;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3000)}
-function allBooks(){return [...new Map([...catalog,...remote,...saved,...history].map(b=>[b.id,b])).values()]}
-function filtered(){let list=view==='saved'?saved:view==='history'?history:allBooks();return list.filter(b=>(genre==='all'||b.genre===genre)&&(!query||`${b.title} ${b.author}`.toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>sortTitle?a.title.localeCompare(b.title):0)}
-function render(){const list=filtered();$('#saved-count').textContent=saved.length;$('#section-title').textContent=view==='saved'?'Your own little library.':view==='history'?'Pick up where you left off.':'Follow your curiosity.';$('#catalog-title').textContent=view==='saved'?'The keep-forever shelf':view==='history'?'Your recent chapters':query?`Results for “${query}”`:genre!=='all'?`${genre[0].toUpperCase()+genre.slice(1)} to get lost in`:'The well-loved shelf';$('#result-count').textContent=`${list.length} books to fall into`;$('#books').innerHTML=list.length?list.map((b,i)=>`<article class="book-card" style="animation-delay:${Math.min(i,9)*45}ms"><div class="cover-wrap"><button class="cover" data-read="${b.id}" aria-label="Read ${escapeHtml(b.title)}" style="--cover:${b.color};--foil:${b.foil}"><span class="cover-author">${escapeHtml(b.author)}</span><span class="cover-title">${escapeHtml(b.title)}</span><span class="ornament">${b.ornament}</span><span class="edition">THE FOLIO CLASSICS COLLECTION</span></button><button class="save-book ${saved.some(s=>s.id===b.id)?'saved':''}" data-save="${b.id}" aria-label="${saved.some(s=>s.id===b.id)?'Remove from':'Add to'} bookshelf" aria-pressed="${saved.some(s=>s.id===b.id)}">${saved.some(s=>s.id===b.id)?'♥':'♡'}</button><button class="read-overlay" data-read="${b.id}">Open book ↗</button></div><div class="book-info"><h4 title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</h4><p>${escapeHtml(b.author)}</p><div class="book-meta"><span class="genre-label">${escapeHtml(b.genre)}</span><span>${b.local?'◉ Ready to read':'↗ Open library'}</span></div></div></article>`).join(''):`<div class="empty-state"><h3>${view==='saved'?'A shelf waiting for your favorites.':view==='history'?'Your next chapter starts here.':'A little further off the beaten path.'}</h3><p>${view==='saved'?'Tap the heart on any book to keep it here.':view==='history'?'Open a book and we’ll remember your place.':'Try a different title or author, or search the online catalog below.'}</p></div>`;$('#load-more').hidden=['saved','history'].includes(view)||!hasMore;$('#load-more').textContent=loading?'Finding more stories…':'Discover more books ↓';$('#load-more').disabled=loading}
-$('#books').addEventListener('click',e=>{const save=e.target.closest('[data-save]'),read=e.target.closest('[data-read]');if(save){let id=Number(save.dataset.save),b=allBooks().find(b=>b.id===id);if(saved.some(s=>s.id===id)){saved=saved.filter(s=>s.id!==id);toast('Removed from your bookshelf')}else{saved.push(b);toast('A good story, saved for later ♡')}persist('folio-saved',saved);render()}else if(read)openBook(Number(read.dataset.read))});
-async function fetchMore(reset=false){if(loading)return;loading=true;if(reset){apiPage=1;hasMore=true;remote=[]}const fetchQuery=query,fetchGenre=genre;render();try{const params=new URLSearchParams({page:String(apiPage)});if(query)params.set('search',query);if(genre!=='all')params.set('topic',genre);const response=await fetch(`/api/books?${params}`,{signal:AbortSignal.timeout(18000)});if(!response.ok)throw Error();const data=await response.json();if(query!==fetchQuery||genre!==fetchGenre)return;const colors=['#576b5c','#836a55','#5c687a','#986c69','#7c835a'];remote.push(...data.results.filter(b=>b.formats['text/plain; charset=utf-8']||b.formats['text/plain; charset=us-ascii']||b.formats['text/plain']).map((b,i)=>({id:b.id,title:b.title,author:b.authors.map(a=>a.name.split(', ').reverse().join(' ')).join(', ')||'Unknown author',genre:genre==='all'?'classics':genre,color:colors[i%colors.length],foil:'#eee0ba',ornament:'❦',local:catalog.some(c=>c.id===b.id&&c.local)})));apiPage++;hasMore=!!data.next;$('#notice').textContent='Discovering the public-domain collection · Powered by Project Gutenberg & Gutendex.'}catch{$('#notice').textContent='The online catalog is currently unavailable. Our downloaded classics are still here to read in full.';toast('Online catalog unavailable. Enjoy the ready-to-read classics.')}finally{loading=false;render()}}
-$('#load-more').onclick=()=>fetchMore();
-$('#search').addEventListener('input',e=>{query=e.target.value.trim();hasMore=true;apiPage=1;remote=[];render();clearTimeout(searchTimer)});$('#search').addEventListener('keydown',e=>{if(e.key==='Enter'){fetchMore(true)}});
-$('.genres').addEventListener('click',e=>{let button=e.target.closest('[data-genre]');if(!button)return;genre=button.dataset.genre;remote=[];apiPage=1;hasMore=true;$('.genres .selected')?.classList.remove('selected');button.classList.add('selected');render()});
-function setView(next){view=next;genre='all';query='';$('#search').value='';document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));document.querySelectorAll('[data-genre]').forEach(b=>b.classList.toggle('selected',b.dataset.genre==='all'));render();if(view!=='discover')$('#discovery').scrollIntoView({behavior:'smooth',block:'start'})}
-document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));$('#avatar').onclick=()=>setView('saved');$('#explore').onclick=()=>$('#discovery').scrollIntoView({behavior:'smooth'});$('#sort').onclick=()=>{sortTitle=!sortTitle;$('#sort span').textContent=sortTitle?'Title A–Z':'Popular first';render()};$('#ambient').onclick=()=>{const quiet=document.body.classList.toggle('quiet');$('#ambient').innerHTML=`<span>◉</span> ${quiet?'Quiet mode on':'Quiet mode'}`;$('#ambient').setAttribute('aria-pressed',quiet);toast(quiet?'A softer light. Settle into a story.':'Back to daylight.')};$('#surprise').onclick=()=>{const books=filtered();if(books.length)openBook(books[Math.floor(Math.random()*books.length)].id);else toast('Explore the library to discover a story.')};
-function visiblePages(){return matchMedia('(max-width:600px)').matches?1:2}
-function paginate(){
- const page=$('#left-page'),style=getComputedStyle(page);
- const width=page.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-4;
- const height=page.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
- const lineCount=Math.max(2,Math.floor(height/parseFloat(style.lineHeight))-1);
- const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');ctx.font=`${style.fontSize} ${style.fontFamily}`;
- const lines=[];
- for(const original of rawText.split('\n')){
-  const words=original.replace(/\t/g,'    ').trimEnd().split(/ +/);let line='';
-  for(let word of words){
-   const candidate=line?line+' '+word:word;
-   if(ctx.measureText(candidate).width<=width){line=candidate;continue}
-   if(line){lines.push(line);line=''}
-   while(ctx.measureText(word).width>width&&word.length>1){let take=Math.max(1,Math.floor(word.length*width/ctx.measureText(word).width));while(take>1&&ctx.measureText(word.slice(0,take)).width>width)take--;lines.push(word.slice(0,take));word=word.slice(take)}
-   line=word;
-  }
-  lines.push(line);
- }
- pages=[];for(let i=0;i<lines.length;i+=lineCount)pages.push(lines.slice(i,i+lineCount).join('\n'));
- if(!pages.length)pages=[''];pageIndex=Math.min(pageIndex,pages.length-1);drawPages();
+import {BookReader} from './reader.js';
+const $ = selector => document.querySelector(selector);
+const readStored = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+const store = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
+const escapeHtml = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let saved = readStored('folio-saved', []), history = readStored('folio-history', []), positions = readStored('folio-positions', {});
+let catalog = [], seeds = [], remote = [], kind = 'book', genre = 'all', view = 'discover', query = '', sortTitle = false;
+let visible = 24, nextPage = 1, hasMore = true, loading = false, serverMode = false, requestId = 0, controller;
+let toastTimer, searchTimer, saveTimer;
+const keyOf = b => String(b.id);
+const kindOf = b => b.kind || 'book';
+const titleCase = s => s.charAt(0).toUpperCase() + s.slice(1);
+function toast(text) { $('#toast').textContent = text; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 3300); }
+function allBooks() { return [...new Map([...catalog, ...seeds, ...remote, ...saved, ...history].map(b => [keyOf(b), b])).values()]; }
+function findBook(id) { return allBooks().find(b => keyOf(b) === String(id)); }
+function selectedBooks() {
+  const list = view === 'saved' ? saved : view === 'history' ? history : allBooks();
+  return list.filter(b => kindOf(b) === kind && (genre === 'all' || b.genre === genre) && (!query || `${b.title} ${b.author} ${(b.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase())))
+    .sort((a, b) => sortTitle ? a.title.localeCompare(b.title) : 0);
 }
-function drawPages(){const n=visiblePages();pageIndex=Math.floor(pageIndex/n)*n;$('#left-page').textContent=pages[pageIndex]||'';$('#right-page').textContent=pages[pageIndex+1]||'The end.\n\nEvery ending is a new beginning. Find your next story in the library.';$('#page-count').textContent=`${pageIndex+1}${n===2?'–'+Math.min(pageIndex+2,pages.length):''} / ${pages.length}`;$('#progress').value=pages.length>1?pageIndex/(pages.length-1)*100:0;$('#prev-page').disabled=pageIndex===0;$('#next-page').disabled=pageIndex+n>=pages.length;if(currentBook&&rawText){positions[currentBook.id]={page:pageIndex,ratio:pageIndex/Math.max(pages.length-1,1),bookmark:positions[currentBook.id]?.bookmark};persist('folio-positions',positions)}$('#bookmark').setAttribute('aria-pressed',positions[currentBook?.id]?.bookmark===pageIndex)}
-async function openBook(id){currentBook=allBooks().find(b=>b.id===id);if(!currentBook)return;const token=++loadToken;rawText='';pages=[];$('#reader-title').textContent=currentBook.title;$('#reader-status').textContent='Opening your next world…';$('#left-page').textContent='';$('#right-page').textContent='';$('#page-count').textContent='';$('#reader').showModal();document.body.style.overflow='hidden';try{const response=await fetch(currentBook.local?`/books/${id}.txt`:`/api/read?id=${id}`,{signal:AbortSignal.timeout(24000)});if(!response.ok)throw Error();let text=await response.text();if(token!==loadToken||!$('#reader').open)return;const normalized=text.replace(/\r\n/g,'\n');
-const start=normalized.match(/\*\*\* START OF (?:THIS|THE) PROJECT GUTENBERG[^\n]*\n/i);
-let body=start?normalized.slice(start.index+start[0].length):normalized;
-body=body.replace(/\*\*\* END OF (?:THIS|THE) PROJECT GUTENBERG[\s\S]*$/i,'');
-rawText=body.trim().replace(/\n{3,}/g,'\n\n');
-$('#source-link').href=currentBook.local?`/books/${id}.txt`:`https://www.gutenberg.org/ebooks/${id}`;$('#reader-status').textContent='';pageIndex=0;const previous=positions[id];paginate();if(previous){pageIndex=Math.floor(previous.ratio*(pages.length-1));drawPages()}history=[currentBook,...history.filter(b=>b.id!==id)].slice(0,100);persist('folio-history',history);render()}catch{if(token!==loadToken)return;$('#reader-status').textContent='We couldn’t open this book right now. Please try again later, or choose a book marked “Ready to read”.'}}
-function closeReader(){++loadToken;$('#reader').close();document.body.style.overflow=''}$('#close-reader').onclick=closeReader;$('#reader').addEventListener('cancel',()=>{++loadToken;document.body.style.overflow=''});
-function turn(direction){if(!rawText)return;pageIndex=Math.max(0,Math.min(pages.length-1,pageIndex+direction*visiblePages()));const book=$('#open-book');book.classList.remove('turning');void book.offsetWidth;book.classList.add('turning');drawPages()}
-$('#prev-page').onclick=()=>turn(-1);$('#next-page').onclick=()=>turn(1);document.addEventListener('keydown',e=>{if(!$('#reader').open||e.target.matches('input'))return;if(e.key==='ArrowRight')turn(1);if(e.key==='ArrowLeft')turn(-1)});$('#progress').oninput=e=>{if(!rawText)return;pageIndex=Math.round(Number(e.target.value)/100*(pages.length-1));drawPages()};function resizeFont(delta){if(!rawText)return;const ratio=pageIndex/Math.max(1,pages.length-1);fontSize=Math.min(26,Math.max(12,fontSize+delta));$('#open-book').style.setProperty('--reader-size',fontSize+'px');paginate();pageIndex=Math.floor(ratio*(pages.length-1));drawPages()}$('#font-up').onclick=()=>resizeFont(2);$('#font-down').onclick=()=>resizeFont(-2);$('#reader-theme').onclick=()=>$('#reader').classList.toggle('reader-dark');$('#bookmark').onclick=()=>{if(!rawText)return;positions[currentBook.id].bookmark=pageIndex;persist('folio-positions',positions);drawPages();toast('Your page is bookmarked. We’ll keep your place.')};$('#fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('#reader').requestFullscreen()}catch{toast('Fullscreen is unavailable in this browser.')}};let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(rawText&&$('#reader').open){const ratio=pageIndex/Math.max(1,pages.length-1);paginate();pageIndex=Math.floor(ratio*(pages.length-1));drawPages()}},150)});
-try{const response=await fetch('/catalog.json');if(!response.ok)throw Error();catalog=await response.json();render()}catch{$('#notice').textContent='The starter collection could not be loaded. Please reload the page.'}
+function render() {
+  const list = selectedBooks();
+  $('#saved-count').textContent = saved.length;
+  $('#section-title').textContent = view === 'saved' ? 'Your shelf. Your kind of stories.' : view === 'history' ? 'Welcome back to your next chapter.' : kind === 'manga' ? 'A whole universe in every panel.' : kind === 'anime' ? 'Find your next favorite universe.' : 'What are you in the mood for?';
+  $('#catalog-title').textContent = view === 'saved' ? 'Saved for a good moment' : view === 'history' ? 'Pick up where you left off' : query ? `Results for “${query}”` : kind === 'manga' ? 'Stories beyond the ordinary' : kind === 'anime' ? 'Your next watchlist' : genre !== 'all' ? `${titleCase(genre)} to get lost in` : 'Worth staying up for';
+  $('#result-count').textContent = `${Math.min(visible, list.length)} of ${list.length} ${kind === 'book' ? 'on this shelf' : 'series'}`;
+  $('#books').innerHTML = list.length ? list.slice(0, visible).map(b => {
+    const kept = saved.some(s => keyOf(s) === keyOf(b));
+    const cover = safeImage(b.cover || `/covers/${b.id}.jpg`);
+    const label = kindOf(b) === 'book' ? 'Read book' : 'Explore series';
+    return `<article class="book-card"><div class="cover-wrap"><button class="cover" data-read="${escapeHtml(b.id)}" aria-label="${label}: ${escapeHtml(b.title)}"><img src="${escapeHtml(cover)}" alt="${escapeHtml(b.title)} cover" width="200" height="300" loading="lazy" decoding="async"></button><button class="save-book ${kept ? 'saved' : ''}" data-save="${escapeHtml(b.id)}" aria-label="${kept ? 'Remove from' : 'Add to'} bookshelf: ${escapeHtml(b.title)}" aria-pressed="${kept}">${kept ? '♥' : '♡'}</button><button class="read-overlay" data-read="${escapeHtml(b.id)}">${label} ↗</button></div><div class="book-info"><h4 title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</h4><p>${escapeHtml(b.author)}</p><div class="book-meta"><span class="genre-label">${escapeHtml(b.genre || b.kind || 'classics')}</span><span class="availability ${b.local ? 'local' : ''}">${kindOf(b) !== 'book' ? 'Series guide' : b.local ? 'Ready to read' : 'Free full text'}</span></div></div></article>`;
+  }).join('') : `<div class="empty-state"><h3>${view === 'saved' ? 'Make a little room for your favorites.' : view === 'history' ? 'Your next chapter starts here.' : loading ? 'Looking through the shelves…' : 'Let’s try another shelf.'}</h3><p>${view === 'saved' ? 'Tap a heart on a book or series to keep it here.' : view === 'history' ? 'Open a book and your reading progress will appear here.' : loading ? 'Searching the online collection.' : 'Try a different title, author, or genre.'}</p></div>`;
+  document.querySelectorAll('.cover img').forEach(img => img.addEventListener('error', () => {
+    const fallback = document.createElement('span'); fallback.className = 'cover-fallback'; fallback.textContent = img.alt.replace(/ cover$/, ''); img.replaceWith(fallback);
+  }, {once:true}));
+  const personal = ['saved','history'].includes(view);
+  $('#load-more').hidden = personal ? visible >= list.length : !hasMore && visible >= list.length;
+  $('#load-more').textContent = loading ? 'Looking through the shelves…' : 'Explore more ↓';
+  $('#load-more').disabled = loading;
+  $('.genres').hidden = kind !== 'book';
+  $('#search').placeholder = kind === 'book' ? 'Search titles, authors, or your next favorite…' : `Search ${kind} titles…`;
+}
+function safeImage(value) {
+  try { const url = new URL(value, location.origin); return url.protocol === 'https:' || url.origin === location.origin ? url.href : ''; } catch { return ''; }
+}
+
+const reader = new BookReader({
+  getPosition: id => positions[id],
+  savePosition: (id, position) => { positions[id] = position; clearTimeout(saveTimer); saveTimer = setTimeout(() => store('folio-positions', positions), 150); },
+  onRead: book => { history = [book, ...history.filter(b => keyOf(b) !== keyOf(book))].slice(0, 100); store('folio-history', history); if (view === 'history') render(); },
+  toast,
+  fetchText: async book => {
+    const url = book.local ? `/books/${book.id}.txt` : serverMode ? `/api/read?id=${book.id}` : book.textUrl || `https://www.gutenberg.org/ebooks/${book.id}.txt.utf-8`;
+    const response = await fetch(url, {signal: AbortSignal.timeout(25000)});
+    if (!response.ok) throw Error('Book unavailable');
+    return response.text();
+  }
+});
+window.addEventListener('pagehide', () => store('folio-positions', positions));
+
+$('#books').addEventListener('click', event => {
+  const save = event.target.closest('[data-save]'), read = event.target.closest('[data-read]');
+  if (save) {
+    const book = findBook(save.dataset.save); if (!book) return;
+    if (saved.some(b => keyOf(b) === keyOf(book))) { saved = saved.filter(b => keyOf(b) !== keyOf(book)); toast('Removed from your bookshelf.'); }
+    else { saved.push(book); toast('Saved to your bookshelf.'); }
+    store('folio-saved', saved); render();
+  } else if (read) openBook(findBook(read.dataset.read));
+});
+document.querySelectorAll('[data-featured]').forEach(button => button.onclick = () => openBook(findBook(button.dataset.featured)));
+function openBook(book) { if (!book) return; if (kindOf(book) === 'book') reader.open(book); else openDetails(book); }
+
+const topicFor = g => ({'sci-fi':'science fiction',science:'science',children:'children',horror:'horror'}[g] || g);
+function categorize(book) {
+  const text = [...(book.subjects || []), ...(book.bookshelves || [])].join(' ').toLowerCase();
+  for (const [needle, category] of [['love stories','romance'],['romance','romance'],['detective','mystery'],['mystery','mystery'],['science fiction','sci-fi'],['fantasy','fantasy'],['fairy','fantasy'],['children','children'],['philosophy','philosophy'],['science','science'],['poetry','poetry'],['adventure','adventure'],['history','history'],['gothic','horror'],['horror','horror']]) if (text.includes(needle)) return category;
+  return 'classics';
+}
+function normalizeBook(book) {
+  const local = catalog.find(b => b.id === book.id);
+  return {id: book.id, title: book.title, author: book.authors.map(a => a.name.split(', ').reverse().join(' ')).join(', ') || 'Unknown author', genre: genre !== 'all' ? genre : categorize(book), tags: book.subjects, kind:'book', cover: local?.cover || book.formats['image/jpeg'], local:!!local?.local, textUrl: Object.entries(book.formats).find(([type]) => type.startsWith('text/plain') && type.includes('utf-8'))?.[1], sourceUrl:`https://www.gutenberg.org/ebooks/${book.id}`};
+}
+function normalizeSeries(series) {
+  return {id:`${kind}-${series.mal_id}`, kind, title:series.title_english || series.title, author:series.authors?.map(a => a.name).join(', ') || series.studios?.map(a => a.name).join(', ') || (kind === 'manga' ? 'Manga series' : 'Anime series'), genre:kind, tags:series.genres?.map(g => g.name), cover:series.images?.jpg?.large_image_url || series.images?.jpg?.image_url, description:series.synopsis || '', score:series.score, status:series.status, episodes:series.episodes, sourceUrl:series.url, officialUrl:'https://mangaplus.shueisha.co.jp/'};
+}
+async function loadRemote({reset = false, silent = false} = {}) {
+  if (['saved','history'].includes(view)) return;
+  if (loading && !reset) return;
+  if (reset) { controller?.abort(); remote = []; nextPage = 1; hasMore = true; }
+  const id = ++requestId; controller = new AbortController(); const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]);
+  loading = true; if (!silent) render();
+  const activeKind = kind;
+  const params = new URLSearchParams({page: String(nextPage)});
+  let url;
+  if (kind === 'book') {
+    if (query) params.set('search', query);
+    if (genre !== 'all') params.set('topic', topicFor(genre));
+    url = serverMode ? `/api/books?${params}` : `https://gutendex.com/books/?${params}`;
+  } else {
+    params.set('kind', kind); if (query) params.set('q', query);
+    if (serverMode) url = `/api/series?${params}`;
+    else {
+      const direct = new URLSearchParams({page:String(nextPage), sfw:'true', limit:'24'});
+      if (query) direct.set('q', query);
+      else { direct.set('order_by', 'members'); direct.set('sort', 'desc'); }
+      url = `https://api.jikan.moe/v4/${kind}?${direct}`;
+    }
+  }
+  try {
+    const response = await fetch(url, {signal}); if (!response.ok) throw Error('Catalog unavailable');
+    const data = await response.json(); if (id !== requestId) return;
+    if (activeKind === 'book') {
+      remote.push(...data.results.filter(b => Object.keys(b.formats).some(t => t.startsWith('text/plain'))).map(normalizeBook));
+      hasMore = !!data.next;
+      if (!query && genre === 'all' && data.count) { $('#catalog-total').textContent = data.count.toLocaleString(); document.querySelector('[data-kind="book"] span').textContent = `${Math.floor(data.count / 1000)}k+`; }
+      $('#notice').textContent = query || genre !== 'all' ? `${data.count.toLocaleString()} matches in the online catalog. More results load below.` : '';
+    } else {
+      remote.push(...data.data.map(normalizeSeries)); hasMore = !!data.pagination?.has_next_page;
+      $('#notice').textContent = activeKind === 'manga' ? 'Discover manga and find official chapters. Availability and free chapters depend on the publisher and your region.' : 'Anime is a series-discovery collection. Open a title for its synopsis, rating, and series guide.';
+    }
+    nextPage++;
+  } catch (error) {
+    if (id !== requestId || error.name === 'AbortError') return;
+    $('#notice').textContent = activeKind === 'book' ? 'The online catalog could not be reached. Downloaded books are still ready to read. Try again with Explore more.' : 'The live series catalog is unavailable right now. You can still explore the featured titles below.';
+  } finally { if (id === requestId) { loading = false; render(); } }
+}
+$('#load-more').onclick = () => {
+  if (visible < selectedBooks().length) { visible += 24; render(); }
+  else { visible += 24; loadRemote(); }
+};
+function resetResults() { visible = 24; controller?.abort(); requestId++; loading = false; remote = []; nextPage = 1; hasMore = true; render(); }
+$('#search').addEventListener('input', event => { query = event.target.value.trim(); resetResults(); clearTimeout(searchTimer); searchTimer = setTimeout(() => loadRemote({reset:true}), 450); });
+$('#search').addEventListener('keydown', event => { if (event.key === 'Enter') { clearTimeout(searchTimer); loadRemote({reset:true}); } });
+$('.genres').onclick = event => {
+  const button = event.target.closest('[data-genre]'); if (!button) return;
+  genre = button.dataset.genre; document.querySelectorAll('[data-genre]').forEach(b => b.classList.toggle('selected', b === button));
+  resetResults(); loadRemote({reset:true});
+};
+document.querySelectorAll('[data-kind]').forEach(button => button.onclick = () => {
+  kind = button.dataset.kind; query = ''; genre = 'all'; $('#search').value = '';
+  document.querySelectorAll('[data-kind]').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-selected', b === button); });
+  document.querySelectorAll('[data-genre]').forEach(b => b.classList.toggle('selected', b.dataset.genre === 'all'));
+  $('#notice').textContent = ''; resetResults(); loadRemote({reset:true});
+});
+function setView(next) {
+  view = next; genre = 'all'; query = ''; $('#search').value = ''; visible = 24;
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('[data-genre]').forEach(b => b.classList.toggle('selected', b.dataset.genre === 'all'));
+  if (['saved','history'].includes(view)) { controller?.abort(); requestId++; loading = false; $('#notice').textContent = ''; }
+  render(); if (view !== 'discover') $('#discovery').scrollIntoView({behavior:'smooth'});
+}
+document.querySelectorAll('[data-view]').forEach(button => button.onclick = () => setView(button.dataset.view));
+$('#avatar').onclick = () => setView('saved');
+$('#explore').onclick = () => $('#discovery').scrollIntoView({behavior:'smooth'});
+$('#sort').onclick = () => { sortTitle = !sortTitle; $('#sort span').textContent = sortTitle ? 'Title A–Z' : 'Popular'; render(); };
+$('#ambient').onclick = () => { const quiet = document.body.classList.toggle('quiet'); $('#ambient').setAttribute('aria-pressed',quiet); $('#ambient').innerHTML = `${quiet ? 'Switch to daylight' : 'Switch to evening mode'} <span>◐</span>`; };
+$('#surprise').onclick = () => { const books = selectedBooks(); if (books.length) openBook(books[Math.floor(Math.random()*books.length)]); else toast('Try another collection to find a story.'); };
+
+function openDetails(book) {
+  const manga = book.kind === 'manga';
+  const source = /^https:\/\/(myanimelist\.net|www\.viz\.com|mangaplus\.shueisha\.co\.jp)\//.test(book.sourceUrl || '') ? book.sourceUrl : `https://myanimelist.net/${manga ? 'manga' : 'anime'}/${String(book.id).split('-')[1]}`;
+  const official = /^https:\/\/(www\.viz\.com|mangaplus\.shueisha\.co\.jp)\//.test(book.officialUrl || '') ? book.officialUrl : 'https://mangaplus.shueisha.co.jp/';
+  $('#detail-content').innerHTML = `<div class="detail-layout"><img class="detail-cover" src="${escapeHtml(safeImage(book.cover))}" alt="${escapeHtml(book.title)} cover"><div class="detail-copy"><div class="eyebrow">${manga ? 'MANGA COLLECTION' : 'ANIME DISCOVERY'}</div><h2>${escapeHtml(book.title)}</h2><div class="detail-meta">${escapeHtml(book.author)}${book.score ? ` · ${escapeHtml(book.score)}/10 on MyAnimeList` : ''}</div><p>${escapeHtml(book.description || 'Discover the story, explore the characters, and find out more in the series guide.')}</p><a class="primary" href="${escapeHtml(manga ? official : source)}" target="_blank" rel="noopener noreferrer">${manga ? 'Find official chapters' : 'Explore series guide'} ↗</a><p class="source-note">${manga ? 'Official reading opens on the publisher’s website. Free chapters and availability vary by title and region.' : 'Explore the complete series guide, ratings, and release information on MyAnimeList.'}</p>${manga ? `<a class="secondary" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">View series details ↗</a>` : ''}</div></div>`;
+  $('#details').showModal();
+}
+$('#close-details').onclick = () => $('#details').close();
+$('#details').addEventListener('click', event => { if (event.target === $('#details')) { const r = $('#details').getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('#details').close(); } });
+
+// Render local content first. Remote catalogs and server detection never block it.
+try {
+  const response = await fetch('/catalog.json'); if (!response.ok) throw Error(); catalog = await response.json(); render();
+} catch { $('#notice').textContent = 'Could not load the downloaded collection. Refresh the page to try again.'; }
+fetch('/series.json').then(r => r.json()).then(data => { seeds = data; if (kind !== 'book') render(); }).catch(() => {});
+try { const response = await fetch('/api/health', {signal:AbortSignal.timeout(1500)}); serverMode = response.ok && (await response.json()).service === 'folio'; } catch {}
+loadRemote({reset:true, silent:true});
